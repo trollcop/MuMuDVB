@@ -1,0 +1,60 @@
+name: MSBuild
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  # Path to the solution file relative to the root of the project.
+  SOLUTION_FILE_PATH: .
+
+  # Configuration type to build.
+  # You can convert this to a build matrix if you need coverage of multiple configuration types.
+  # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+  BUILD_CONFIGURATION: Release
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Checkout pthreads
+      uses: actions/checkout@v3
+      with:
+          repository: trollcop/pthread-win32
+          path: pthreads
+
+    - name: Build threads
+      working-directory: pthreads
+      run: msbuild /m /p:Configuration=Release /p:Platform=x86 windows/VS2019/pthread_lib.2019.vcxproj
+
+    - name: Copy config.h
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: copy -Force src/config_win32.h src/config.h
+      
+    - name: Copy pthreads-win32 Release artifact
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: copy -Force pthreads/windows/VS2019/bin/Release-Unicode-32bit-x86/pthread_static_lib.lib pthread/lib/pthread_static_lib.lib
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      # Add additional options to the MSBuild command line here (like platform or verbosity level).
+      # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:platform=x86 ${{env.SOLUTION_FILE_PATH}}
+      
+    - name: Release
+      uses: actions/upload-artifact@v3
+      with:
+        name: MuMuDVB
+        path: Release/MuMuDVB.exe
